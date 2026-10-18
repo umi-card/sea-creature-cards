@@ -73,12 +73,24 @@
   .result p { text-align: center; font-weight: 700; margin: 0 0 8px; }
   .result a { display: block; text-align: center; margin-top: 10px; color: var(--accent); }
   .message { text-align: center; padding: 48px 8px; line-height: 1.8; }
+  .privacy {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+  .privacy p { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
 </style>
 </head>
 <body>
 <main id="app">
   <div class="message" id="loading">よみこみ中…</div>
 </main>
+<footer class="privacy">
+  <p>🔒 入力した「見つけた日」と「名前」は、お使いのスマートフォンの中だけで画像にしています。サーバーへ送信したり、このサイトに保存したりすることはありません。</p>
+</footer>
 
 <template id="card-view">
   <h1 id="title"></h1>
