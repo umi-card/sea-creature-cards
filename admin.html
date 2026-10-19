@@ -92,23 +92,43 @@
     <span class="badge">管理者専用</span>
   </header>
 
-  <!-- 鍵の設定 -->
+  <!-- 部員ログイン -->
+  <section id="login" class="hidden">
+    <h2>部員用パスワードで入る</h2>
+    <div class="grid">
+      <label>パスワード
+        <input type="password" id="login-pw" autocomplete="current-password" enterkeyhint="go">
+      </label>
+      <button id="login-btn">入る</button>
+      <div class="status" id="login-status"></div>
+      <p class="note">パスワードは部の管理者に聞いてください。</p>
+      <p class="note">管理者の方：<a href="#" id="open-setup">鍵とパスワードの設定はこちら</a></p>
+    </div>
+  </section>
+
+  <!-- 管理者の初期設定 -->
   <section id="key-setup" class="hidden">
-    <h2>はじめに：管理者の鍵を登録</h2>
-    <p class="note">カードを公開するには、GitHub で発行した「鍵（トークン）」が必要です。鍵はこの端末の中だけに保存され、ほかの人には見えません。</p>
+    <h2>管理者の設定（鍵と部員用パスワード）</h2>
+    <p class="note">GitHub の鍵を、部員用パスワードで暗号化して保存します。部員はパスワードだけで使えるようになります。鍵の有効期限が切れたときや、パスワードを変えたいときもここで設定しなおします。</p>
     <ol class="steps">
-      <li>GitHub にログインした状態で <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">鍵の発行ページ</a> を開く</li>
-      <li>Token name に <code>カード管理</code>、Expiration（有効期限）を選ぶ</li>
-      <li>Repository access で <b>Only select repositories</b> → <code id="repo-name"></code> を選ぶ</li>
-      <li>Permissions → Repository permissions → <b>Contents</b> を <b>Read and write</b> にする</li>
-      <li>Generate token を押し、表示された鍵（<code>github_pat_</code>で始まる文字）をコピーして下に貼る</li>
+      <li>GitHub にログインした状態で <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener">鍵の発行ページ（Classic）</a> を開く</li>
+      <li>Note に <code>card</code>、Expiration（有効期限）を選ぶ</li>
+      <li>Select scopes で <b>public_repo</b> だけにチェック</li>
+      <li>Generate token を押し、表示された鍵（<code>ghp_</code>で始まる文字）をコピーして下に貼る</li>
     </ol>
     <div class="grid" style="margin-top:12px">
-      <label>鍵（トークン）
-        <input type="password" id="token" autocomplete="off" placeholder="github_pat_...">
+      <label>GitHub の鍵（トークン）
+        <input type="password" id="token" autocomplete="off" placeholder="ghp_... または github_pat_...">
       </label>
-      <button id="save-key">鍵を登録する</button>
+      <label>部員用パスワード（12文字以上）
+        <input type="password" id="new-pw" autocomplete="new-password">
+      </label>
+      <label>部員用パスワード（確認）
+        <input type="password" id="new-pw2" autocomplete="new-password">
+      </label>
+      <button id="save-key">設定する</button>
       <div class="status" id="key-status"></div>
+      <button class="sub small" id="back-to-login" type="button">パスワードで入る画面にもどる</button>
     </div>
   </section>
 
@@ -180,9 +200,26 @@
   </section>
 
   <section id="key-info" class="hidden">
-    <div class="row" style="justify-content:space-between">
-      <span class="note">この端末には管理者の鍵が登録されています。</span>
-      <button class="danger small" id="forget-key">鍵を削除</button>
+    <h2>設定</h2>
+    <div class="grid">
+      <details>
+        <summary style="font-weight:700;cursor:pointer">部員用パスワードを変更する</summary>
+        <div class="grid" style="margin-top:12px">
+          <p class="note">変更すると、ログイン中の部員も含めて全員が新しいパスワードで入りなおしになります。</p>
+          <label>新しいパスワード（12文字以上）
+            <input type="password" id="chg-pw" autocomplete="new-password">
+          </label>
+          <label>新しいパスワード（確認）
+            <input type="password" id="chg-pw2" autocomplete="new-password">
+          </label>
+          <button class="sub" id="chg-btn">パスワードを変更する</button>
+          <div class="status" id="chg-status"></div>
+        </div>
+      </details>
+      <div class="row" style="justify-content:space-between">
+        <span class="note">この端末はログイン中です。</span>
+        <button class="danger small" id="forget-key">ログアウト</button>
+      </div>
     </div>
   </section>
 </main>
@@ -196,11 +233,14 @@
   const BRANCH = 'main';
   const SITE = host.endsWith('.github.io') ? `https://${host}/${REPO}/` : new URL('./', location.href).href;
   const KEY_STORE = 'seacards-admin-token';
+  const KID_STORE = 'seacards-admin-kid';
+  const KEY_FILE = 'admin-key.json';   // パスワードで暗号化した鍵（公開されるが、パスワードがないと読めない）
+  const PBKDF2_ITER = 600000;
+  const MIN_PW = 12;
   const API = 'https://api.github.com';
   const SCALE = 2;
 
   const $ = (id) => document.getElementById(id);
-  $('repo-name').textContent = `${OWNER}/${REPO}`;
 
   let token = '';
   try { token = localStorage.getItem(KEY_STORE) || ''; } catch (e) {}
@@ -269,8 +309,8 @@
   }
 
   function explain(e) {
-    if (e.status === 401) return '鍵が正しくないか、有効期限が切れています。「鍵を削除」してから登録しなおしてください。';
-    if (e.status === 403 || e.status === 404) return 'この鍵には書き込みの権限がありません。Contents を「Read and write」にして、このリポジトリを選んだ鍵を発行してください。';
+    if (e.status === 401) return '鍵が使えなくなっています（有効期限切れなど）。管理者が新しい鍵で設定しなおしてください。';
+    if (e.status === 403 || e.status === 404) return 'この鍵には書き込みの権限がありません。public_repo にチェックを入れた鍵（または Contents を Read and write にした鍵）を発行してください。';
     if (e instanceof TypeError) return '通信できませんでした。電波の良いところでもう一度お試しください。';
     return `エラーが起きました（${e.message}${e.detail ? '：' + e.detail : ''}）`;
   }
@@ -280,7 +320,39 @@
     el.innerHTML = html;
   }
 
-  // ── 鍵の登録 ──
+  // ── 鍵の暗号化（パスワード → PBKDF2 → AES-GCM） ──
+  const b64 = (u8) => bytesToBase64(u8);
+  const unb64 = (t) => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+
+  async function pwKey(pw, salt, iter) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' },
+      base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+
+  async function sealToken(tok, pw) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await pwKey(pw, salt, PBKDF2_ITER);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(tok)));
+    const kid = b64(crypto.getRandomValues(new Uint8Array(9)));
+    return { v: 1, kid, iter: PBKDF2_ITER, salt: b64(salt), iv: b64(iv), ct: b64(ct) };
+  }
+
+  async function openToken(sealed, pw) {
+    const key = await pwKey(pw, unb64(sealed.salt), sealed.iter);
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(sealed.iv) }, key, unb64(sealed.ct));
+    return new TextDecoder().decode(pt);
+  }
+
+  // 公開サイトから暗号化された鍵を読む（なければ null）
+  async function fetchSealed() {
+    const r = await fetch(`${SITE}${KEY_FILE}?t=${Date.now()}`, { cache: 'no-store' });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new TypeError('fetch failed');
+    return r.json();
+  }
+
   async function checkKey() {
     const repo = await gh(repoPath(''));
     if (!repo.permissions || !repo.permissions.push) {
@@ -288,18 +360,79 @@
     }
   }
 
+  function remember(tok, kid) {
+    token = tok;
+    try { localStorage.setItem(KEY_STORE, tok); localStorage.setItem(KID_STORE, kid); } catch (e) {}
+  }
+  function forget() {
+    token = '';
+    try { localStorage.removeItem(KEY_STORE); localStorage.removeItem(KID_STORE); } catch (e) {}
+  }
+
+  function checkNewPw(a, b) {
+    if (a.length < MIN_PW) return `パスワードは${MIN_PW}文字以上にしてください。`;
+    if (a !== b) return '確認用のパスワードが一致しません。';
+    return '';
+  }
+
+  // 暗号化した鍵を保存（サイトへの反映は1〜2分後）
+  async function publishSealed(sealed) {
+    await commit(async () => ({
+      message: '部員用パスワードを設定',
+      files: [{ path: KEY_FILE, base64: textToBase64(JSON.stringify(sealed)) }],
+    }));
+  }
+
+  // ── 部員ログイン ──
+  async function login() {
+    const pw = $('login-pw').value;
+    if (!pw) return;
+    const btn = $('login-btn');
+    btn.disabled = true;
+    status($('login-status'), 'warn', '確認しています…');
+    try {
+      const sealed = await fetchSealed();
+      if (!sealed) return status($('login-status'), 'err', 'まだ管理者がパスワードを設定していません。');
+      let tok;
+      try { tok = await openToken(sealed, pw); }
+      catch (e) { return status($('login-status'), 'err', 'パスワードがちがいます。'); }
+      token = tok;
+      await checkKey();
+      remember(tok, sealed.kid);
+      $('login-pw').value = '';
+      $('login-status').className = 'status';
+      showEditor();
+    } catch (e) {
+      token = '';
+      status($('login-status'), 'err', explain(e));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  $('login-btn').addEventListener('click', login);
+  $('login-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+
+  // ── 管理者の設定（鍵＋パスワード） ──
   $('save-key').addEventListener('click', async () => {
     const t = $('token').value.trim();
-    if (!t) return;
+    const pw = $('new-pw').value, pw2 = $('new-pw2').value;
+    if (!t) return status($('key-status'), 'err', 'GitHub の鍵を貼りつけてください。');
+    const bad = checkNewPw(pw, pw2);
+    if (bad) return status($('key-status'), 'err', bad);
     const btn = $('save-key');
     btn.disabled = true;
     token = t;
-    status($('key-status'), 'warn', '確認しています…');
+    status($('key-status'), 'warn', '鍵を確認しています…');
     try {
       await checkKey();
-      try { localStorage.setItem(KEY_STORE, t); } catch (e) {}
-      $('token').value = '';
+      status($('key-status'), 'warn', '暗号化して保存しています…');
+      const sealed = await sealToken(t, pw);
+      await publishSealed(sealed);
+      remember(t, sealed.kid);
+      ['token', 'new-pw', 'new-pw2'].forEach(id => $(id).value = '');
+      $('key-status').className = 'status';
       showEditor();
+      alert('設定しました。部員はこのパスワードで入れるようになります（反映まで1〜2分かかります）。');
     } catch (e) {
       token = '';
       status($('key-status'), 'err', explain(e));
@@ -308,21 +441,48 @@
     }
   });
 
-  $('forget-key').addEventListener('click', () => {
-    if (!confirm('この端末から管理者の鍵を削除しますか？（GitHub 上の鍵は消えません）')) return;
-    try { localStorage.removeItem(KEY_STORE); } catch (e) {}
-    token = '';
-    showKeySetup();
+  // ── パスワード変更（ログイン中の鍵で暗号化しなおす） ──
+  $('chg-btn').addEventListener('click', async () => {
+    const pw = $('chg-pw').value, pw2 = $('chg-pw2').value;
+    const bad = checkNewPw(pw, pw2);
+    if (bad) return status($('chg-status'), 'err', bad);
+    if (!confirm('部員用パスワードを変更しますか？\n全員が新しいパスワードで入りなおしになります。')) return;
+    const btn = $('chg-btn');
+    btn.disabled = true;
+    status($('chg-status'), 'warn', '保存しています…');
+    try {
+      const sealed = await sealToken(token, pw);
+      await publishSealed(sealed);
+      remember(token, sealed.kid);
+      ['chg-pw', 'chg-pw2'].forEach(id => $(id).value = '');
+      status($('chg-status'), 'ok', '変更しました。1〜2分後から新しいパスワードが使えます。');
+    } catch (e) {
+      status($('chg-status'), 'err', explain(e));
+    } finally {
+      btn.disabled = false;
+    }
   });
 
-  function showKeySetup() {
-    $('key-setup').classList.remove('hidden');
-    ['editor', 'list-section', 'search-section', 'key-info'].forEach(id => $(id).classList.add('hidden'));
+  $('forget-key').addEventListener('click', () => {
+    if (!confirm('この端末からログアウトしますか？')) return;
+    forget();
+    showLogin();
+  });
+
+  $('back-to-login').addEventListener('click', showLogin);
+  document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'open-setup') { e.preventDefault(); showSetup(); }
+  });
+
+  const PANELS = ['login', 'key-setup', 'editor', 'list-section', 'search-section', 'key-info'];
+  function showOnly(ids) {
+    PANELS.forEach(id => $(id).classList.toggle('hidden', !ids.includes(id)));
   }
+  function showLogin() { showOnly(['login']); }
+  function showSetup() { showOnly(['key-setup']); }
 
   function showEditor() {
-    $('key-setup').classList.add('hidden');
-    ['editor', 'list-section', 'key-info'].forEach(id => $(id).classList.remove('hidden'));
+    showOnly(['editor', 'list-section', 'key-info']);
     draw();
     loadList();
     loadSearchLink();
@@ -598,7 +758,21 @@
 
   // ── 起動 ──
   CardRender.ensureFonts().then(draw);
-  if (token) showEditor(); else showKeySetup();
+  (async () => {
+    let sealed;
+    try { sealed = await fetchSealed(); } catch (e) { sealed = undefined; }   // 通信できない時は undefined
+    if (sealed === null) {
+      // まだ一度も設定されていない
+      if (token) return showEditor();
+      return showSetup();
+    }
+    let kid = '';
+    try { kid = localStorage.getItem(KID_STORE) || ''; } catch (e) {}
+    // パスワードが変更されていたら入りなおし
+    if (token && (sealed === undefined || sealed.kid === kid)) return showEditor();
+    forget();
+    showLogin();
+  })();
 })();
 </script>
 </body>
