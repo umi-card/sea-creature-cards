@@ -62,7 +62,13 @@
     }
   }
 
-  fetch('master.json').then(r => r.json()).then(list => { cards = list; render(); });
+  Promise.all([
+    fetch('master.json').then(r => r.json()),
+    fetch(`cards.json?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+  ]).then(([base, added]) => {
+    cards = [...base, ...added.map((c, i) => ({ no: base.length + i + 1, id: c.id, name: c.name }))];
+    render();
+  });
   baseInput.addEventListener('input', render);
 </script>
 </body>

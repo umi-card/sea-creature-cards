@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>カード管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="card-render.js"></script>
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --card: #ffffff;
+    --ink: #1d2b36;
+    --muted: #5d6f7c;
+    --accent: #2b6c52;
+    --accent-ink: #ffffff;
+    --danger: #b3261e;
+    --line: #d9d4ca;
+    --ok-bg: #e5f2ea;
+    --warn-bg: #fdf0d8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", sans-serif;
+    font-weight: 500;
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px calc(40px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  .badge { font-size: 12px; background: var(--accent); color: var(--accent-ink); padding: 3px 10px; border-radius: 999px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  label { display: grid; gap: 6px; font-weight: 700; font-size: 15px; }
+  .grid { display: grid; gap: 14px; }
+  input[type=text], input[type=password], textarea {
+    font: inherit; font-size: 17px; padding: 11px 12px; border: 1.5px solid var(--line);
+    border-radius: 10px; background: #fff; color: var(--ink); width: 100%;
+  }
+  textarea { min-height: 110px; resize: vertical; line-height: 1.6; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  input.latin { font-family: "Helvetica Neue", Arial, sans-serif; font-style: italic; }
+  .note { font-size: 13px; color: var(--muted); font-weight: 500; margin: 0; line-height: 1.6; }
+  button, .btn {
+    font: inherit; font-weight: 700; font-size: 16px; border: 0; border-radius: 999px;
+    padding: 12px 18px; min-height: 46px; background: var(--accent); color: var(--accent-ink);
+    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+  }
+  button.sub, .btn.sub { background: #fff; color: var(--accent); border: 1.5px solid var(--accent); }
+  button.danger { background: #fff; color: var(--danger); border: 1.5px solid var(--danger); }
+  button.small, .btn.small { font-size: 14px; padding: 6px 12px; min-height: 36px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .wide { width: 100%; }
+  .preview { line-height: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+  .preview canvas { width: 100%; height: auto; display: block; touch-action: none; }
+  .seg { display: flex; border: 1.5px solid var(--accent); border-radius: 999px; overflow: hidden; }
+  .seg button { flex: 1; border-radius: 0; background: #fff; color: var(--accent); min-height: 40px; font-size: 14px; }
+  .seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+  .file { display: block; border: 1.5px dashed var(--accent); border-radius: 10px; padding: 14px; text-align: center; color: var(--accent); font-weight: 700; cursor: pointer; }
+  .file input { display: none; }
+  .status { border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.6; display: none; }
+  .status.show { display: block; }
+  .status.ok { background: var(--ok-bg); }
+  .status.warn { background: var(--warn-bg); }
+  .status.err { background: #fbe4e2; color: var(--danger); }
+  .done { text-align: center; }
+  .done img { width: 180px; height: 180px; image-rendering: pixelated; }
+  .done a.link { word-break: break-all; font-size: 13px; color: var(--accent); }
+  ul.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  ul.cards li { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+  ul.cards .title { font-weight: 700; }
+  ul.cards .sci { font-family: "Helvetica Neue", Arial, sans-serif; font-style: italic; color: var(--muted); font-size: 14px; }
+  ul.cards .meta { font-size: 12px; color: var(--muted); }
+  .hidden { display: none !important; }
+  ol.steps { margin: 0; padding-left: 20px; line-height: 1.8; font-size: 14px; }
+  ol.steps code { background: #f1efe9; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>生きものカード 管理</h1>
+    <span class="badge">管理者専用</span>
+  </header>
+
+  <!-- 鍵の設定 -->
+  <section id="key-setup" class="hidden">
+    <h2>はじめに：管理者の鍵を登録</h2>
+    <p class="note">カードを公開するには、GitHub で発行した「鍵（トークン）」が必要です。鍵はこの端末の中だけに保存され、ほかの人には見えません。</p>
+    <ol class="steps">
+      <li>GitHub にログインした状態で <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">鍵の発行ページ</a> を開く</li>
+      <li>Token name に <code>カード管理</code>、Expiration（有効期限）を選ぶ</li>
+      <li>Repository access で <b>Only select repositories</b> → <code id="repo-name"></code> を選ぶ</li>
+      <li>Permissions → Repository permissions → <b>Contents</b> を <b>Read and write</b> にする</li>
+      <li>Generate token を押し、表示された鍵（<code>github_pat_</code>で始まる文字）をコピーして下に貼る</li>
+    </ol>
+    <div class="grid" style="margin-top:12px">
+      <label>鍵（トークン）
+        <input type="password" id="token" autocomplete="off" placeholder="github_pat_...">
+      </label>
+      <button id="save-key">鍵を登録する</button>
+      <div class="status" id="key-status"></div>
+    </div>
+  </section>
+
+  <!-- カード作成 -->
+  <section id="editor" class="hidden">
+    <h2>新しいカードをつくる</h2>
+    <div class="grid">
+      <div class="preview"><canvas id="canvas"></canvas></div>
+      <p class="note" id="drag-hint">写真の部分をドラッグすると位置を調整できます</p>
+
+      <label class="file">📷 写真をえらぶ / 撮る
+        <input type="file" id="photo" accept="image/*">
+      </label>
+      <div class="row">
+        <div class="seg" role="group" aria-label="写真の向き" style="flex:1">
+          <button type="button" data-layout="portrait" aria-pressed="true">縦長の写真</button>
+          <button type="button" data-layout="landscape" aria-pressed="false">横長の写真</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="note" style="font-weight:700">拡大</span>
+        <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
+      </div>
+
+      <label>和名
+        <input type="text" id="name" maxlength="24" placeholder="例：カサゴの仲間">
+      </label>
+      <label>学名
+        <input type="text" id="sci" class="latin" maxlength="40" placeholder="例：Sebastiscus sp." autocapitalize="off" autocorrect="off" spellcheck="false">
+      </label>
+      <label>特徴
+        <textarea id="feature" maxlength="140" placeholder="例：岩場にすみ、周囲の色にまぎれて身を隠す。"></textarea>
+      </label>
+      <p class="note" id="overflow-note"></p>
+
+      <button id="publish" class="wide">このカードを公開する</button>
+      <div class="status" id="pub-status"></div>
+      <div class="done hidden" id="done">
+        <p style="font-weight:700;margin:0 0 8px">カード用のQRコード</p>
+        <img id="done-qr" alt="QRコード"><br>
+        <a class="link" id="done-link" target="_blank" rel="noopener"></a>
+        <div class="row" style="justify-content:center;margin-top:10px">
+          <button class="sub small" id="done-qr-dl">QRを画像で保存</button>
+          <button class="sub small" id="new-card">続けてつくる</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 登録済み -->
+  <section id="list-section" class="hidden">
+    <h2>追加したカード</h2>
+    <p class="note" id="list-empty">まだありません。</p>
+    <ul class="cards" id="list"></ul>
+    <p class="note" style="margin-top:12px">最初からある21枚のカードはここには出ません（QRコード一覧ページで確認できます）。</p>
+  </section>
+
+  <section id="key-info" class="hidden">
+    <div class="row" style="justify-content:space-between">
+      <span class="note">この端末には管理者の鍵が登録されています。</span>
+      <button class="danger small" id="forget-key">鍵を削除</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  // ── 公開先（GitHub Pages の URL から判定） ──
+  const host = location.hostname;
+  const OWNER = host.endsWith('.github.io') ? host.split('.')[0] : 'umi-card';
+  const REPO = host.endsWith('.github.io') ? (location.pathname.split('/')[1] || 'sea-creature-cards') : 'sea-creature-cards';
+  const BRANCH = 'main';
+  const SITE = host.endsWith('.github.io') ? `https://${host}/${REPO}/` : new URL('./', location.href).href;
+  const KEY_STORE = 'seacards-admin-token';
+  const API = 'https://api.github.com';
+  const SCALE = 2;
+
+  const $ = (id) => document.getElementById(id);
+  $('repo-name').textContent = `${OWNER}/${REPO}`;
+
+  let token = '';
+  try { token = localStorage.getItem(KEY_STORE) || ''; } catch (e) {}
+
+  // ── GitHub API ──
+  async function gh(path, opts = {}) {
+    const res = await fetch(API + path, {
+      ...opts,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      cache: 'no-store',
+    });
+    if (res.status === 404 && opts.allow404) return null;
+    if (!res.ok) {
+      const err = new Error(`GitHub ${res.status}`);
+      err.status = res.status;
+      try { err.detail = (await res.json()).message; } catch (e) {}
+      throw err;
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  const repoPath = (p) => `/repos/${OWNER}/${REPO}${p}`;
+
+  function bytesToBase64(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+  const textToBase64 = (t) => bytesToBase64(new TextEncoder().encode(t));
+  const base64ToText = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, '')), c => c.charCodeAt(0)));
+  async function blobToBase64(blob) { return bytesToBase64(new Uint8Array(await blob.arrayBuffer())); }
+
+  async function readIndex(ref) {
+    const f = await gh(repoPath(`/contents/cards.json?ref=${ref}`), { allow404: true });
+    return f ? JSON.parse(base64ToText(f.content)) : [];
+  }
+
+  // buildFiles(index) → { files:[{path, base64|null}], message }。最新の main に対して 1 コミットで反映（競合したらやり直す）
+  async function commit(buildFiles) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const ref = await gh(repoPath(`/git/ref/heads/${BRANCH}`));
+      const head = ref.object.sha;
+      const base = await gh(repoPath(`/git/commits/${head}`));
+      const index = await readIndex(head);
+      const { files, message } = await buildFiles(index);
+      const tree = [];
+      for (const f of files) {
+        if (f.base64 == null) { tree.push({ path: f.path, mode: '100644', type: 'blob', sha: null }); continue; }
+        const blob = await gh(repoPath('/git/blobs'), { method: 'POST', body: JSON.stringify({ content: f.base64, encoding: 'base64' }) });
+        tree.push({ path: f.path, mode: '100644', type: 'blob', sha: blob.sha });
+      }
+      const newTree = await gh(repoPath('/git/trees'), { method: 'POST', body: JSON.stringify({ base_tree: base.tree.sha, tree }) });
+      const newCommit = await gh(repoPath('/git/commits'), { method: 'POST', body: JSON.stringify({ message, tree: newTree.sha, parents: [head] }) });
+      try {
+        await gh(repoPath(`/git/refs/heads/${BRANCH}`), { method: 'PATCH', body: JSON.stringify({ sha: newCommit.sha }) });
+        return;
+      } catch (e) {
+        if (e.status !== 422 || attempt === 2) throw e;   // 同時に別の更新が入った場合はやり直す
+      }
+    }
+  }
+
+  function explain(e) {
+    if (e.status === 401) return '鍵が正しくないか、有効期限が切れています。「鍵を削除」してから登録しなおしてください。';
+    if (e.status === 403 || e.status === 404) return 'この鍵には書き込みの権限がありません。Contents を「Read and write」にして、このリポジトリを選んだ鍵を発行してください。';
+    if (e instanceof TypeError) return '通信できませんでした。電波の良いところでもう一度お試しください。';
+    return `エラーが起きました（${e.message}${e.detail ? '：' + e.detail : ''}）`;
+  }
+
+  function status(el, kind, html) {
+    el.className = `status show ${kind}`;
+    el.innerHTML = html;
+  }
+
+  // ── 鍵の登録 ──
+  async function checkKey() {
+    const repo = await gh(repoPath(''));
+    if (!repo.permissions || !repo.permissions.push) {
+      const e = new Error('no push'); e.status = 403; throw e;
+    }
+  }
+
+  $('save-key').addEventListener('click', async () => {
+    const t = $('token').value.trim();
+    if (!t) return;
+    const btn = $('save-key');
+    btn.disabled = true;
+    token = t;
+    status($('key-status'), 'warn', '確認しています…');
+    try {
+      await checkKey();
+      try { localStorage.setItem(KEY_STORE, t); } catch (e) {}
+      $('token').value = '';
+      showEditor();
+    } catch (e) {
+      token = '';
+      status($('key-status'), 'err', explain(e));
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('forget-key').addEventListener('click', () => {
+    if (!confirm('この端末から管理者の鍵を削除しますか？（GitHub 上の鍵は消えません）')) return;
+    try { localStorage.removeItem(KEY_STORE); } catch (e) {}
+    token = '';
+    showKeySetup();
+  });
+
+  function showKeySetup() {
+    $('key-setup').classList.remove('hidden');
+    ['editor', 'list-section', 'key-info'].forEach(id => $(id).classList.add('hidden'));
+  }
+
+  function showEditor() {
+    $('key-setup').classList.add('hidden');
+    ['editor', 'list-section', 'key-info'].forEach(id => $(id).classList.remove('hidden'));
+    draw();
+    loadList();
+  }
+
+  // ── カードの編集 ──
+  const canvas = $('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = CardRender.W * SCALE;
+  canvas.height = CardRender.H * SCALE;
+  const state = { photo: null, layout: 'portrait', view: { zoom: 1, ox: 0, oy: 0 } };
+
+  function cardData() {
+    return { name: $('name').value, sci: $('sci').value, feature: $('feature').value, photo: state.photo, layout: state.layout, view: state.view };
+  }
+
+  let lines = null;
+  function draw() {
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    const r = CardRender.render(ctx, cardData());
+    lines = r;
+    $('overflow-note').textContent = r.overflow ? '⚠ 特徴の文が長すぎて、はみ出しています。短くしてください。' : '';
+  }
+
+  let fontTimer;
+  async function redraw() {
+    draw();
+    clearTimeout(fontTimer);
+    fontTimer = setTimeout(async () => {
+      await CardRender.ensureFonts($('name').value + $('feature').value);
+      draw();
+    }, 150);
+  }
+
+  ['name', 'sci', 'feature'].forEach(id => $(id).addEventListener('input', redraw));
+
+  function setLayout(layout) {
+    state.layout = layout;
+    document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.layout === layout)));
+    state.view = { zoom: 1, ox: 0, oy: 0 };
+    $('zoom').value = 1;
+    redraw();
+  }
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setLayout(b.dataset.layout)));
+
+  $('zoom').addEventListener('input', (e) => { state.view.zoom = +e.target.value; redraw(); });
+
+  $('photo').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      state.photo = img;
+      setLayout(img.naturalWidth > img.naturalHeight * 1.3 ? 'landscape' : 'portrait');
+    };
+    img.onerror = () => alert('この写真は読みこめませんでした。別の写真をえらんでください。');
+    img.src = url;
+  });
+
+  // 写真の位置をドラッグで調整
+  let drag = null;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!state.photo) return;
+    const rect = canvas.getBoundingClientRect();
+    const k = CardRender.W / rect.width;
+    const x = (e.clientX - rect.left) * k, y = (e.clientY - rect.top) * k;
+    const p = CardRender.LAYOUTS[state.layout].photo;
+    if (x < p.x || x > p.x + p.w || y < p.y || y > p.y + p.h) return;
+    const img = state.photo;
+    const s = Math.max(p.w / img.naturalWidth, p.h / img.naturalHeight) * state.view.zoom;
+    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: state.view.ox, oy: state.view.oy, k,
+             spareX: img.naturalWidth * s - p.w, spareY: img.naturalHeight * s - p.h };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = (e.clientX - drag.sx) * drag.k, dy = (e.clientY - drag.sy) * drag.k;
+    const clamp = (v) => Math.max(-1, Math.min(1, v));
+    if (drag.spareX > 0) state.view.ox = clamp(drag.ox + dx / (drag.spareX / 2));
+    if (drag.spareY > 0) state.view.oy = clamp(drag.oy + dy / (drag.spareY / 2));
+    draw();
+  });
+  const endDrag = () => { drag = null; };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  // ── 公開 ──
+  const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+  function newId() {
+    const a = crypto.getRandomValues(new Uint8Array(8));
+    return Array.from(a, v => ALPHABET[v % ALPHABET.length]).join('');
+  }
+
+  $('publish').addEventListener('click', async () => {
+    const name = $('name').value.trim(), sci = $('sci').value.trim(), feature = $('feature').value.trim();
+    const pub = $('pub-status');
+    const missing = [!state.photo && '写真', !name && '和名', !feature && '特徴'].filter(Boolean);
+    if (missing.length) return status(pub, 'err', `${missing.join('・')}を入れてください。`);
+    if (!confirm(`「${name}」のカードを公開しますか？\n公開すると、だれでも見られるようになります。`)) return;
+
+    const btn = $('publish');
+    btn.disabled = true;
+    status(pub, 'warn', '画像をつくっています…');
+    try {
+      await CardRender.ensureFonts(name + feature);
+      draw();
+      const jpg = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
+      const imageB64 = await blobToBase64(jpg);
+      const id = newId();
+      const created = new Date().toISOString();
+      const card = {
+        name, sci, feature, layout: state.layout, created,
+        image: `${id}.jpg`, w: CardRender.W, h: CardRender.H,
+        date: lines.date, finder: lines.finder,
+      };
+      status(pub, 'warn', 'サーバーに保存しています…');
+      await commit(async (index) => ({
+        message: `カード追加: ${name}`,
+        files: [
+          { path: `c/${id}.jpg`, base64: imageB64 },
+          { path: `c/${id}.json`, base64: textToBase64(JSON.stringify(card)) },
+          { path: 'cards.json', base64: textToBase64(JSON.stringify([...index, { id, name, sci, created }], null, 1)) },
+        ],
+      }));
+      const url = `${SITE}index.html?c=${id}`;
+      showDone(name, url);
+      status(pub, 'ok', '保存しました。サイトに反映されるまで1〜2分かかります…');
+      loadList();
+      waitLive(id).then(ok => status(pub, ok ? 'ok' : 'warn', ok
+        ? `✅ 公開されました！ 下のQRコードから開けます。`
+        : '保存はできています。反映に時間がかかっているので、少し待ってからQRを読みこんでください。'));
+    } catch (e) {
+      status(pub, 'err', explain(e));
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  async function waitLive(id) {
+    for (let i = 0; i < 36; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      try {
+        const r = await fetch(`${SITE}c/${id}.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (r.ok) return true;
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  // ── QRコード ──
+  function qrCanvas(url) {
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    const n = qr.getModuleCount(), cell = 20, border = 4;
+    const c = document.createElement('canvas');
+    c.width = c.height = (n + border * 2) * cell;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#000';
+    for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) {
+      if (qr.isDark(r, col)) g.fillRect((col + border) * cell, (r + border) * cell, cell, cell);
+    }
+    return c;
+  }
+
+  async function saveQr(name, url) {
+    const blob = await new Promise(ok => qrCanvas(url).toBlob(ok, 'image/png'));
+    const file = new File([blob], `QR_${name}.png`, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = file.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+
+  let doneInfo = null;
+  function showDone(name, url) {
+    doneInfo = { name, url };
+    $('done-qr').src = qrCanvas(url).toDataURL('image/png');
+    $('done-link').href = url;
+    $('done-link').textContent = url;
+    $('done').classList.remove('hidden');
+    $('done').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  $('done-qr-dl').addEventListener('click', () => doneInfo && saveQr(doneInfo.name, doneInfo.url));
+  $('new-card').addEventListener('click', () => {
+    ['name', 'sci', 'feature'].forEach(id => $(id).value = '');
+    $('photo').value = '';
+    state.photo = null;
+    $('done').classList.add('hidden');
+    $('pub-status').className = 'status';
+    setLayout('portrait');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // ── 登録済み一覧 ──
+  async function loadList() {
+    const ul = $('list');
+    try {
+      const ref = await gh(repoPath(`/git/ref/heads/${BRANCH}`));
+      const index = await readIndex(ref.object.sha);
+      ul.replaceChildren();
+      $('list-empty').classList.toggle('hidden', index.length > 0);
+      for (const c of [...index].reverse()) {
+        const url = `${SITE}index.html?c=${c.id}`;
+        const li = document.createElement('li');
+        const t = document.createElement('div');
+        t.innerHTML = '<div class="title"></div><div class="sci"></div><div class="meta"></div>';
+        t.querySelector('.title').textContent = c.name;
+        t.querySelector('.sci').textContent = c.sci || '';
+        t.querySelector('.meta').textContent = new Date(c.created).toLocaleString('ja-JP') + ' に追加';
+        const row = document.createElement('div');
+        row.className = 'row';
+        const open = document.createElement('a');
+        open.className = 'btn sub small'; open.href = url; open.target = '_blank'; open.rel = 'noopener'; open.textContent = '開く';
+        const qrBtn = document.createElement('button');
+        qrBtn.className = 'sub small'; qrBtn.textContent = 'QRを保存';
+        qrBtn.onclick = () => saveQr(c.name, url);
+        const del = document.createElement('button');
+        del.className = 'danger small'; del.textContent = '削除';
+        del.onclick = () => removeCard(c, del);
+        row.append(open, qrBtn, del);
+        li.append(t, row);
+        ul.append(li);
+      }
+    } catch (e) {
+      $('list-empty').classList.remove('hidden');
+      $('list-empty').textContent = explain(e);
+    }
+  }
+
+  async function removeCard(c, btn) {
+    if (!confirm(`「${c.name}」のカードを削除しますか？\nこのカードのQRコードは使えなくなります。`)) return;
+    btn.disabled = true;
+    try {
+      await commit(async (index) => ({
+        message: `カード削除: ${c.name}`,
+        files: [
+          { path: `c/${c.id}.jpg`, base64: null },
+          { path: `c/${c.id}.json`, base64: null },
+          { path: 'cards.json', base64: textToBase64(JSON.stringify(index.filter(x => x.id !== c.id), null, 1)) },
+        ],
+      }));
+      loadList();
+    } catch (e) {
+      btn.disabled = false;
+      alert(explain(e));
+    }
+  }
+
+  // ── 起動 ──
+  CardRender.ensureFonts().then(draw);
+  if (token) showEditor(); else showKeySetup();
+})();
+</script>
+</body>
+</html>
