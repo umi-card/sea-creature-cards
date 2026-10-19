@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>カード管理（管理者）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="manage.css">
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="card-render.js"></script>
+</head>
+<body data-mode="admin">
+<main>
+  <header>
+    <h1>生きものカード 管理</h1>
+    <span class="badge">管理者専用</span>
+  </header>
+
+  <section id="login" class="hidden">
+    <h2>管理者パスワードで入る</h2>
+    <div class="grid">
+      <label>管理者パスワード
+        <input type="password" id="login-pw" autocomplete="current-password" enterkeyhint="go">
+      </label>
+      <button id="login-btn">入る</button>
+      <div class="status" id="login-status"></div>
+      <p class="note">鍵の期限が切れたときや、パスワードを忘れたとき：<a href="#" id="open-setup">GitHub の鍵で設定しなおす</a></p>
+    </div>
+  </section>
+
+  <section id="key-setup" class="hidden">
+    <h2>管理者の設定</h2>
+    <p class="note">GitHub の鍵を、管理者パスワードと部員用パスワードでそれぞれ暗号化して保存します。部員は部員用パスワードで <b>部員用ページ</b> に、管理者は管理者パスワードでこのページに入れます。</p>
+    <ol class="steps">
+      <li>GitHub にログインした状態で <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener">鍵の発行ページ（Classic）</a> を開く</li>
+      <li>Note に <code>card</code>、Expiration（有効期限）を選ぶ</li>
+      <li>Select scopes で <b>public_repo</b> だけにチェック</li>
+      <li>Generate token を押し、表示された鍵（<code>ghp_</code>で始まる文字）をコピーして下に貼る</li>
+    </ol>
+    <div class="grid" style="margin-top:12px">
+      <label>GitHub の鍵（トークン）
+        <input type="password" id="token" autocomplete="off" placeholder="ghp_... または github_pat_...">
+      </label>
+      <label>管理者パスワード（12文字以上）
+        <input type="password" id="admin-pw" autocomplete="new-password">
+      </label>
+      <label>管理者パスワード（確認）
+        <input type="password" id="admin-pw2" autocomplete="new-password">
+      </label>
+      <label>部員用パスワード（12文字以上）
+        <input type="password" id="member-pw" autocomplete="new-password">
+      </label>
+      <label>部員用パスワード（確認）
+        <input type="password" id="member-pw2" autocomplete="new-password">
+      </label>
+      <p class="note">部員用パスワードがすでに決まっている場合、空欄のままなら今のパスワードがそのまま使えます。管理者パスワードとは別のものにしてください。</p>
+      <button id="save-key">設定する</button>
+      <div class="status" id="key-status"></div>
+      <button class="sub small" id="back-to-login" type="button">パスワードで入る画面にもどる</button>
+    </div>
+  </section>
+
+  <div class="status show warn hidden" id="admin-pw-needed" style="margin-bottom:16px">⚠ まだ管理者パスワードが決まっていません。下の「設定」から管理者パスワードを決めてください。</div>
+
+  <!-- カード作成 -->
+  <section id="editor" class="hidden">
+    <h2>新しいカードをつくる</h2>
+    <div class="grid">
+      <div class="preview"><canvas id="canvas"></canvas></div>
+      <p class="note" id="drag-hint">写真の部分をドラッグすると位置を調整できます</p>
+
+      <label class="file">📷 写真をえらぶ / 撮る
+        <input type="file" id="photo" accept="image/*">
+      </label>
+      <div class="row">
+        <div class="seg" role="group" aria-label="写真の向き" style="flex:1">
+          <button type="button" data-layout="portrait" aria-pressed="true">縦長の写真</button>
+          <button type="button" data-layout="landscape" aria-pressed="false">横長の写真</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="note" style="font-weight:700">拡大</span>
+        <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
+      </div>
+
+      <label>和名
+        <input type="text" id="name" maxlength="24" placeholder="例：カサゴの仲間">
+      </label>
+      <label>学名
+        <input type="text" id="sci" class="latin" maxlength="40" placeholder="例：Sebastiscus sp." autocapitalize="off" autocorrect="off" spellcheck="false">
+      </label>
+      <label>特徴
+        <textarea id="feature" maxlength="140" placeholder="例：岩場にすみ、周囲の色にまぎれて身を隠す。"></textarea>
+      </label>
+      <p class="note" id="overflow-note"></p>
+
+      <button id="publish" class="wide">このカードを公開する</button>
+      <div class="status" id="pub-status"></div>
+      <div class="done hidden" id="done">
+        <p style="font-weight:700;margin:0 0 8px">カード用のQRコード</p>
+        <img id="done-qr" alt="QRコード"><br>
+        <a class="link" id="done-link" target="_blank" rel="noopener"></a>
+        <div class="row" style="justify-content:center;margin-top:10px">
+          <button class="sub small" id="done-qr-dl">QRを画像で保存</button>
+          <button class="sub small" id="new-card">続けてつくる</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 検索ページ -->
+  <section id="search-section" class="hidden">
+    <h2>検索ページ（追加したカード用）</h2>
+    <p class="note">このリンクを知っている人だけが、追加したカードをさがせます。サイトのほかのページからはたどれません。</p>
+    <div class="done" style="margin-top:12px">
+      <img id="search-qr" alt="検索ページのQRコード"><br>
+      <a class="link" id="search-link" target="_blank" rel="noopener"></a>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button class="sub small" id="search-qr-dl">QRを画像で保存</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 登録済み -->
+  <section id="list-section" class="hidden">
+    <h2>追加したカード</h2>
+    <p class="note" id="list-empty">まだありません。</p>
+    <ul class="cards" id="list"></ul>
+    <p class="note" style="margin-top:12px">最初からある21枚のカードはここには出ません。追加したカードは、最初の21枚とは別の場所（n フォルダ）に保存されます。</p>
+  </section>
+
+  <section id="key-info" class="hidden">
+    <h2>設定</h2>
+    <div class="grid">
+      <details>
+        <summary style="font-weight:700;cursor:pointer">部員用パスワードを変更する</summary>
+        <div class="grid" style="margin-top:12px">
+          <p class="note">変更すると、ログイン中の部員は全員、新しいパスワードで入りなおしになります。</p>
+          <label>新しい部員用パスワード（12文字以上）
+            <input type="password" id="chg-member-pw" autocomplete="new-password">
+          </label>
+          <label>新しい部員用パスワード（確認）
+            <input type="password" id="chg-member-pw2" autocomplete="new-password">
+          </label>
+          <button class="sub" id="chg-member-btn">部員用パスワードを変更する</button>
+          <div class="status" id="chg-member-status"></div>
+        </div>
+      </details>
+      <details>
+        <summary style="font-weight:700;cursor:pointer">管理者パスワードを変更する</summary>
+        <div class="grid" style="margin-top:12px">
+          <p class="note">変更すると、ほかの端末の管理者ページも入りなおしになります。</p>
+          <label>新しい管理者パスワード（12文字以上）
+            <input type="password" id="chg-admin-pw" autocomplete="new-password">
+          </label>
+          <label>新しい管理者パスワード（確認）
+            <input type="password" id="chg-admin-pw2" autocomplete="new-password">
+          </label>
+          <button class="sub" id="chg-admin-btn">管理者パスワードを変更する</button>
+          <div class="status" id="chg-admin-status"></div>
+        </div>
+      </details>
+      <div class="row" style="justify-content:space-between">
+        <span class="note">この端末はログイン中です。</span>
+        <button class="danger small" id="forget-key">ログアウト</button>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="manage.js"></script>
+</body>
+</html>

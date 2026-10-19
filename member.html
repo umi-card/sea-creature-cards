@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>カードづくり（部員用）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="manage.css">
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="card-render.js"></script>
+</head>
+<body data-mode="member">
+<main>
+  <header>
+    <h1>生きものカードづくり</h1>
+    <span class="badge">部員用</span>
+  </header>
+
+  <section id="login" class="hidden">
+    <h2>部員用パスワードで入る</h2>
+    <div class="grid">
+      <label>パスワード
+        <input type="password" id="login-pw" autocomplete="current-password" enterkeyhint="go">
+      </label>
+      <button id="login-btn">入る</button>
+      <div class="status" id="login-status"></div>
+      <p class="note">パスワードは部の管理者に聞いてください。</p>
+    </div>
+  </section>
+
+  <!-- カード作成 -->
+  <section id="editor" class="hidden">
+    <h2>新しいカードをつくる</h2>
+    <div class="grid">
+      <div class="preview"><canvas id="canvas"></canvas></div>
+      <p class="note" id="drag-hint">写真の部分をドラッグすると位置を調整できます</p>
+
+      <label class="file">📷 写真をえらぶ / 撮る
+        <input type="file" id="photo" accept="image/*">
+      </label>
+      <div class="row">
+        <div class="seg" role="group" aria-label="写真の向き" style="flex:1">
+          <button type="button" data-layout="portrait" aria-pressed="true">縦長の写真</button>
+          <button type="button" data-layout="landscape" aria-pressed="false">横長の写真</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="note" style="font-weight:700">拡大</span>
+        <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
+      </div>
+
+      <label>和名
+        <input type="text" id="name" maxlength="24" placeholder="例：カサゴの仲間">
+      </label>
+      <label>学名
+        <input type="text" id="sci" class="latin" maxlength="40" placeholder="例：Sebastiscus sp." autocapitalize="off" autocorrect="off" spellcheck="false">
+      </label>
+      <label>特徴
+        <textarea id="feature" maxlength="140" placeholder="例：岩場にすみ、周囲の色にまぎれて身を隠す。"></textarea>
+      </label>
+      <p class="note" id="overflow-note"></p>
+
+      <button id="publish" class="wide">このカードを公開する</button>
+      <div class="status" id="pub-status"></div>
+      <div class="done hidden" id="done">
+        <p style="font-weight:700;margin:0 0 8px">カード用のQRコード</p>
+        <img id="done-qr" alt="QRコード"><br>
+        <a class="link" id="done-link" target="_blank" rel="noopener"></a>
+        <div class="row" style="justify-content:center;margin-top:10px">
+          <button class="sub small" id="done-qr-dl">QRを画像で保存</button>
+          <button class="sub small" id="new-card">続けてつくる</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 検索ページ -->
+  <section id="search-section" class="hidden">
+    <h2>検索ページ（追加したカード用）</h2>
+    <p class="note">このリンクを知っている人だけが、追加したカードをさがせます。サイトのほかのページからはたどれません。</p>
+    <div class="done" style="margin-top:12px">
+      <img id="search-qr" alt="検索ページのQRコード"><br>
+      <a class="link" id="search-link" target="_blank" rel="noopener"></a>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button class="sub small" id="search-qr-dl">QRを画像で保存</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 登録済み -->
+  <section id="list-section" class="hidden">
+    <h2>追加したカード</h2>
+    <p class="note" id="list-empty">まだありません。</p>
+    <ul class="cards" id="list"></ul>
+    <p class="note" style="margin-top:12px">最初からある21枚のカードはここには出ません。追加したカードは、最初の21枚とは別の場所（n フォルダ）に保存されます。</p>
+  </section>
+
+  <section id="key-info" class="hidden">
+    <div class="row" style="justify-content:space-between">
+      <span class="note">この端末はログイン中です。</span>
+      <button class="danger small" id="forget-key">ログアウト</button>
+    </div>
+  </section>
+</main>
+<script src="manage.js"></script>
+</body>
+</html>
