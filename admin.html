@@ -158,12 +158,25 @@
     </div>
   </section>
 
+  <!-- 検索ページ -->
+  <section id="search-section" class="hidden">
+    <h2>検索ページ（追加したカード用）</h2>
+    <p class="note">このリンクを知っている人だけが、追加したカードをさがせます。サイトのほかのページからはたどれません。</p>
+    <div class="done" style="margin-top:12px">
+      <img id="search-qr" alt="検索ページのQRコード"><br>
+      <a class="link" id="search-link" target="_blank" rel="noopener"></a>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button class="sub small" id="search-qr-dl">QRを画像で保存</button>
+      </div>
+    </div>
+  </section>
+
   <!-- 登録済み -->
   <section id="list-section" class="hidden">
     <h2>追加したカード</h2>
     <p class="note" id="list-empty">まだありません。</p>
     <ul class="cards" id="list"></ul>
-    <p class="note" style="margin-top:12px">最初からある21枚のカードはここには出ません（QRコード一覧ページで確認できます）。</p>
+    <p class="note" style="margin-top:12px">最初からある21枚のカードはここには出ません。追加したカードは、最初の21枚とは別の場所（n フォルダ）に保存されます。</p>
   </section>
 
   <section id="key-info" class="hidden">
@@ -226,7 +239,7 @@
   async function blobToBase64(blob) { return bytesToBase64(new Uint8Array(await blob.arrayBuffer())); }
 
   async function readIndex(ref) {
-    const f = await gh(repoPath(`/contents/cards.json?ref=${ref}`), { allow404: true });
+    const f = await gh(repoPath(`/contents/n/index.json?ref=${ref}`), { allow404: true });
     return f ? JSON.parse(base64ToText(f.content)) : [];
   }
 
@@ -304,7 +317,7 @@
 
   function showKeySetup() {
     $('key-setup').classList.remove('hidden');
-    ['editor', 'list-section', 'key-info'].forEach(id => $(id).classList.add('hidden'));
+    ['editor', 'list-section', 'search-section', 'key-info'].forEach(id => $(id).classList.add('hidden'));
   }
 
   function showEditor() {
@@ -312,7 +325,26 @@
     ['editor', 'list-section', 'key-info'].forEach(id => $(id).classList.remove('hidden'));
     draw();
     loadList();
+    loadSearchLink();
   }
+
+  // 検索ページのファイル名は推測されにくい名前（s-xxxx.html）。管理者の鍵で一覧を見て探す
+  let searchUrl = null;
+  async function loadSearchLink() {
+    try {
+      const ref = await gh(repoPath(`/git/ref/heads/${BRANCH}`));
+      const commitObj = await gh(repoPath(`/git/commits/${ref.object.sha}`));
+      const tree = await gh(repoPath(`/git/trees/${commitObj.tree.sha}`));
+      const f = tree.tree.find(e => /^s-[a-z0-9]{8,}\.html$/.test(e.path));
+      if (!f) return;
+      searchUrl = SITE + f.path;
+      $('search-link').href = searchUrl;
+      $('search-link').textContent = searchUrl;
+      $('search-qr').src = qrCanvas(searchUrl).toDataURL('image/png');
+      $('search-section').classList.remove('hidden');
+    } catch (e) {}
+  }
+  $('search-qr-dl').addEventListener('click', () => searchUrl && saveQr('検索ページ', searchUrl));
 
   // ── カードの編集 ──
   const canvas = $('canvas');
@@ -429,12 +461,12 @@
       await commit(async (index) => ({
         message: `カード追加: ${name}`,
         files: [
-          { path: `c/${id}.jpg`, base64: imageB64 },
-          { path: `c/${id}.json`, base64: textToBase64(JSON.stringify(card)) },
-          { path: 'cards.json', base64: textToBase64(JSON.stringify([...index, { id, name, sci, created }], null, 1)) },
+          { path: `n/${id}.jpg`, base64: imageB64 },
+          { path: `n/${id}.json`, base64: textToBase64(JSON.stringify(card)) },
+          { path: 'n/index.json', base64: textToBase64(JSON.stringify([...index, { id, name, sci, created }], null, 1)) },
         ],
       }));
-      const url = `${SITE}index.html?c=${id}`;
+      const url = `${SITE}index.html?n=${id}`;
       showDone(name, url);
       status(pub, 'ok', '保存しました。サイトに反映されるまで1〜2分かかります…');
       loadList();
@@ -452,7 +484,7 @@
     for (let i = 0; i < 36; i++) {
       await new Promise(r => setTimeout(r, 5000));
       try {
-        const r = await fetch(`${SITE}c/${id}.json?t=${Date.now()}`, { cache: 'no-store' });
+        const r = await fetch(`${SITE}n/${id}.json?t=${Date.now()}`, { cache: 'no-store' });
         if (r.ok) return true;
       } catch (e) {}
     }
@@ -518,7 +550,7 @@
       ul.replaceChildren();
       $('list-empty').classList.toggle('hidden', index.length > 0);
       for (const c of [...index].reverse()) {
-        const url = `${SITE}index.html?c=${c.id}`;
+        const url = `${SITE}index.html?n=${c.id}`;
         const li = document.createElement('li');
         const t = document.createElement('div');
         t.innerHTML = '<div class="title"></div><div class="sci"></div><div class="meta"></div>';
@@ -552,9 +584,9 @@
       await commit(async (index) => ({
         message: `カード削除: ${c.name}`,
         files: [
-          { path: `c/${c.id}.jpg`, base64: null },
-          { path: `c/${c.id}.json`, base64: null },
-          { path: 'cards.json', base64: textToBase64(JSON.stringify(index.filter(x => x.id !== c.id), null, 1)) },
+          { path: `n/${c.id}.jpg`, base64: null },
+          { path: `n/${c.id}.json`, base64: null },
+          { path: 'n/index.json', base64: textToBase64(JSON.stringify(index.filter(x => x.id !== c.id), null, 1)) },
         ],
       }));
       loadList();
