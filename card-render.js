@@ -139,11 +139,15 @@
     }
   }
 
-  // data: { name, sci, feature, photo(Image|null), layout, view:{zoom,ox,oy} }
+  // data: { name, sci, feature, photo(Image|null), layout, view:{zoom,ox,oy}, preview }
+  // 和名・学名は空でもよい。preview のときだけ、和名の場所にうすく「（和名）」を出す
   function render(ctx, data) {
     const L = LAYOUTS[data.layout] || LAYOUTS.portrait;
-    const name = (data.name || '').trim() || '（和名）';
+    const typed = (data.name || '').trim();
+    const placeholder = !typed && data.preview;
+    const name = typed || (placeholder ? '（和名）' : '');
     const sci = (data.sci || '').trim();
+    const nameColor = placeholder ? '#c4c4c4' : '#111';
 
     drawGrid(ctx);
     drawPhoto(ctx, data.photo, L.photo, data.view || {});
@@ -154,24 +158,33 @@
       // 和名と学名を横に並べて中央寄せ
       const gap = 18;
       let ts = L.title.size, ss = L.sci.size, tw, sw;
+      const g = () => (name && sci ? gap : 0);
       for (;;) {
-        ctx.font = `900 ${ts}px ${JP}`; tw = ctx.measureText(name).width;
+        ctx.font = `900 ${ts}px ${JP}`; tw = name ? ctx.measureText(name).width : 0;
         ctx.font = `italic 400 ${ss}px ${LATIN}`; sw = sci ? ctx.measureText(sci).width : 0;
-        if (tw + (sci ? gap + sw : 0) <= L.title.maxW || ts <= 30) break;
+        if (tw + g() + sw <= L.title.maxW || ts <= 30) break;
         ts -= 2; ss = Math.max(20, ss - 1);
       }
-      let x = L.title.cx - (tw + (sci ? gap + sw : 0)) / 2;
+      let x = L.title.cx - (tw + g() + sw) / 2;
       ctx.textAlign = 'left';
-      ctx.font = `900 ${ts}px ${JP}`;
-      ctx.fillText(name, x, L.title.cy);
+      if (name) {
+        ctx.fillStyle = nameColor;
+        ctx.font = `900 ${ts}px ${JP}`;
+        ctx.fillText(name, x, L.title.cy);
+        ctx.fillStyle = '#111';
+      }
       if (sci) {
         ctx.font = `italic 400 ${ss}px ${LATIN}`;
-        ctx.fillText(sci, x + tw + gap, L.title.cy + ts * 0.06);
+        ctx.fillText(sci, x + tw + g(), L.title.cy + ts * 0.06);
       }
     } else {
       ctx.textAlign = 'center';
-      fitFont(ctx, name, 900, L.title.size, JP, L.title.maxW, 28);
-      ctx.fillText(name, L.title.cx, L.title.cy);
+      if (name) {
+        fitFont(ctx, name, 900, L.title.size, JP, L.title.maxW, 28);
+        ctx.fillStyle = nameColor;
+        ctx.fillText(name, L.title.cx, L.title.cy);
+        ctx.fillStyle = '#111';
+      }
       if (sci) {
         fitFont(ctx, sci, 'italic 400', L.sci.size, LATIN, L.sci.maxW, 18);
         ctx.fillText(sci, L.sci.cx, L.sci.cy);

@@ -81,7 +81,7 @@
       const a = document.createElement('a');
       a.href = `index.html?n=${encodeURIComponent(c.id)}`;
       const name = document.createElement('span');
-      name.className = 'r-name'; name.textContent = c.name;
+      name.className = 'r-name'; name.textContent = c.name || '名前なしのカード';
       const sci = document.createElement('span');
       sci.className = 'r-sci'; sci.textContent = c.sci || '';
       a.append(name, sci);

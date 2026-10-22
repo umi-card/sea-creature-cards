@@ -333,9 +333,10 @@
   }
 
   let lines = null;
-  function draw() {
+  // forImage=true は公開用の画像（和名が空でも「（和名）」の見本文字を入れない）
+  function draw(forImage = false) {
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
-    const r = CardRender.render(ctx, cardData());
+    const r = CardRender.render(ctx, { ...cardData(), preview: !forImage });
     lines = r;
     $('overflow-note').textContent = r.overflow ? '⚠ 特徴の文が長すぎて、はみ出しています。短くしてください。' : '';
   }
@@ -413,17 +414,20 @@
   $('publish').addEventListener('click', async () => {
     const name = $('name').value.trim(), sci = $('sci').value.trim(), feature = $('feature').value.trim();
     const pub = $('pub-status');
-    const missing = [!state.photo && '写真', !name && '和名', !feature && '特徴'].filter(Boolean);
+    // 和名・学名はなくてもよい（種がわからない生きもの用）
+    const missing = [!state.photo && '写真', !feature && '特徴'].filter(Boolean);
     if (missing.length) return status(pub, 'err', `${missing.join('・')}を入れてください。`);
-    if (!confirm(`「${name}」のカードを公開しますか？\n公開すると、だれでも見られるようになります。`)) return;
+    const label = cardLabel({ name, sci });
+    if (!confirm(`「${label}」のカードを公開しますか？${name ? '' : '\n（和名なしのカードになります）'}\n公開すると、だれでも見られるようになります。`)) return;
 
     const btn = $('publish');
     btn.disabled = true;
     status(pub, 'warn', '画像をつくっています…');
     try {
       await CardRender.ensureFonts(name + feature);
-      draw();
+      draw(true);
       const jpg = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
+      draw();
       const imageB64 = await blobToBase64(jpg);
       const id = newId();
       const created = new Date().toISOString();
@@ -434,7 +438,7 @@
       };
       status(pub, 'warn', 'サーバーに保存しています…');
       await commit(async (index) => ({
-        message: `カード追加: ${name}`,
+        message: `カード追加: ${label}`,
         files: [
           { path: `n/${id}.jpg`, base64: imageB64 },
           { path: `n/${id}.json`, base64: textToBase64(JSON.stringify(card)) },
@@ -442,12 +446,15 @@
         ],
       }));
       const url = `${SITE}index.html?n=${id}`;
-      showDone(name, url);
-      status(pub, 'ok', '保存しました。サイトに反映されるまで1〜2分かかります…');
+      showDone(label, url);
+      status(pub, 'ok', '保存しました。');
       loadList();
-      waitLive(id).then(ok => status(pub, ok ? 'ok' : 'warn', ok
-        ? `✅ 公開されました！ 下のQRコードから開けます。`
-        : '保存はできています。反映に時間がかかっているので、少し待ってからQRを読みこんでください。'));
+      waitLive(id).then(ok => {
+        status($('done-status'), ok ? 'ok' : 'warn', ok
+          ? '✅ 公開されました！ このQRコードから開けます。'
+          : '保存はできています。反映に時間がかかっているので、少し待ってからQRを読みこんでください。');
+        if (ok) status(pub, 'ok', '✅ 公開されました。');
+      });
     } catch (e) {
       status(pub, 'err', explain(e));
     } finally {
@@ -485,7 +492,7 @@
 
   async function saveQr(name, url) {
     const blob = await new Promise(ok => qrCanvas(url).toBlob(ok, 'image/png'));
-    const file = new File([blob], `QR_${name}.png`, { type: 'image/png' });
+    const file = new File([blob], `QR_${name || 'カード'}.png`, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }); return; } catch (e) { if (e.name === 'AbortError') return; }
     }
@@ -496,25 +503,38 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   }
 
+  // 公開したらすぐ、QRコードを画面の真ん中に出す
   let doneInfo = null;
-  function showDone(name, url) {
-    doneInfo = { name, url };
+  function showDone(label, url) {
+    doneInfo = { name: label, url };
+    $('done-title').textContent = `「${label}」のQRコード`;
     $('done-qr').src = qrCanvas(url).toDataURL('image/png');
     $('done-link').href = url;
     $('done-link').textContent = url;
+    status($('done-status'), 'warn', '⏳ サイトに反映中です（1〜2分）。反映されるとこのQRで開けるようになります。');
     $('done').classList.remove('hidden');
-    $('done').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.body.classList.add('modal-open');
+  }
+  function closeDone() {
+    $('done').classList.add('hidden');
+    document.body.classList.remove('modal-open');
   }
   $('done-qr-dl').addEventListener('click', () => doneInfo && saveQr(doneInfo.name, doneInfo.url));
+  $('done-close').addEventListener('click', closeDone);
   $('new-card').addEventListener('click', () => {
     ['name', 'sci', 'feature'].forEach(id => $(id).value = '');
     $('photo').value = '';
     state.photo = null;
-    $('done').classList.add('hidden');
+    closeDone();
     $('pub-status').className = 'status';
     setLayout('portrait');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+
+  // 一覧などに出す名前（和名 → 学名 → 「名前なし」）
+  function cardLabel(c) {
+    return (c.name || '').trim() || (c.sci || '').trim() || '名前なしのカード';
+  }
 
   // ── 登録済み一覧 ──
   async function loadList() {
@@ -529,7 +549,7 @@
         const li = document.createElement('li');
         const t = document.createElement('div');
         t.innerHTML = '<div class="title"></div><div class="sci"></div><div class="meta"></div>';
-        t.querySelector('.title').textContent = c.name;
+        t.querySelector('.title').textContent = cardLabel(c);
         t.querySelector('.sci').textContent = c.sci || '';
         t.querySelector('.meta').textContent = new Date(c.created).toLocaleString('ja-JP') + ' に追加';
         const row = document.createElement('div');
@@ -538,7 +558,7 @@
         open.className = 'btn sub small'; open.href = url; open.target = '_blank'; open.rel = 'noopener'; open.textContent = '開く';
         const qrBtn = document.createElement('button');
         qrBtn.className = 'sub small'; qrBtn.textContent = 'QRを保存';
-        qrBtn.onclick = () => saveQr(c.name, url);
+        qrBtn.onclick = () => saveQr(cardLabel(c), url);
         const del = document.createElement('button');
         del.className = 'danger small'; del.textContent = '削除';
         del.onclick = () => removeCard(c, del);
@@ -553,11 +573,11 @@
   }
 
   async function removeCard(c, btn) {
-    if (!confirm(`「${c.name}」のカードを削除しますか？\nこのカードのQRコードは使えなくなります。`)) return;
+    if (!confirm(`「${cardLabel(c)}」のカードを削除しますか？\nこのカードのQRコードは使えなくなります。`)) return;
     btn.disabled = true;
     try {
       await commit(async (index) => ({
-        message: `カード削除: ${c.name}`,
+        message: `カード削除: ${cardLabel(c)}`,
         files: [
           { path: `n/${c.id}.jpg`, base64: null },
           { path: `n/${c.id}.json`, base64: null },

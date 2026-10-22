@@ -150,8 +150,9 @@
   async function start(card) {
     const base = await loadImage(`${dir}/${card.image}`);
     app.replaceChildren(document.getElementById('card-view').content.cloneNode(true));
-    document.title = card.name + '｜生きものカード';
-    document.getElementById('title').textContent = card.name;
+    const label = card.name || card.sci || '生きものカード';   // 和名なしのカードもある
+    document.title = label === '生きものカード' ? label : label + '｜生きものカード';
+    document.getElementById('title').textContent = label;
 
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -193,7 +194,7 @@
       try {
         await redraw();
         const blob = await new Promise(ok => canvas.toBlob(ok, 'image/png'));
-        const filename = `${card.name}_${dateInput.value || 'card'}.png`;
+        const filename = `${card.name || card.sci || '生きものカード'}_${dateInput.value || 'card'}.png`;
         showResult(blob, filename);
         await share(blob, filename, card.name);
       } finally {
